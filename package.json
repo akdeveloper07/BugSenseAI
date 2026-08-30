@@ -1,0 +1,26 @@
+{
+  "name": "bugsense-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BugSense AI — intelligent debugging assistant for students and developers",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev -w @bugsense/api\" \"npm run dev -w @bugsense/web\"",
+    "dev:api": "npm run dev -w @bugsense/api",
+    "dev:web": "npm run dev -w @bugsense/web",
+    "build": "npm run build -w @bugsense/api && npm run build -w @bugsense/web",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "npm run prisma:migrate -w @bugsense/api",
+    "db:seed": "npm run db:seed -w @bugsense/api",
+    "db:generate": "npm run prisma:generate -w @bugsense/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

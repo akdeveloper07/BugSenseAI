@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bugsense-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bugsense
+      POSTGRES_PASSWORD: bugsense
+      POSTGRES_DB: bugsense
+    ports:
+      - "5432:5432"
+    volumes:
+      - bugsense_pgdata:/var/lib/postgresql/data
+
+volumes:
+  bugsense_pgdata:

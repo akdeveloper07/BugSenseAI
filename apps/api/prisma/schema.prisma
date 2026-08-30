@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BugType {
+  SYNTAX
+  RUNTIME
+  LOGIC
+  UI
+  DATABASE
+  SECURITY
+  PERFORMANCE
+  CONFIGURATION
+  OTHER
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Priority {
+  P1
+  P2
+  P3
+  P4
+}
+
+model User {
+  id                  String     @id @default(cuid())
+  name                String
+  email               String     @unique
+  passwordHash        String
+  role                Role       @default(USER)
+  isActive            Boolean    @default(true)
+  resetTokenHash      String?
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  analyses            Analysis[]
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model Analysis {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language       String
+  framework      String?
+  environment    String?
+  codeInput      String    @db.Text
+  logsInput      String?   @db.Text
+  bugDescription String?   @db.Text
+  bugDetected    Boolean   @default(true)
+  bugType        BugType   @default(OTHER)
+  severity       Severity  @default(MEDIUM)
+  priority       Priority  @default(P3)
+  rootCause      String    @db.Text
+  impact         String    @db.Text
+  suggestedFix   String    @db.Text
+  confidence     Int       @default(0)
+  summary        String    @db.Text
+  tags           String[]  @default([])
+  rating         Int?
+  rawAiResponse  String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([bugType])
+  @@index([severity])
+  @@index([language])
+}
