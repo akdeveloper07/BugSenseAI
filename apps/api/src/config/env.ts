@@ -10,7 +10,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().default("7d"),
-  CLIENT_ORIGIN: z.string().default("https://bug-sense-jxc31nuwl-akdeveloper07.vercel.app"),
+  CLIENT_ORIGIN: z.string().default("https://bug-sense-ai-wheat.vercel.app"),
   AI_BASE_URL: z.string().default("https://api.openai.com/v1"),
   AI_API_KEY: z.string().min(1),
   AI_MODEL: z.string().default("gpt-4o-mini"),
