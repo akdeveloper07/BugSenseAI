@@ -154,36 +154,95 @@ ${buildUserPrompt(input)}`;
   });
 
   // ---------------------------------------------------------
-  // GEMINI API REQUEST
+  // GEMINI API REQUEST WITH RETRY
   // ---------------------------------------------------------
-  const res = await fetch(url, {
-    method: "POST",
+  let res: Response | null = null;
 
-    headers: {
-      "Content-Type": "application/json",
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(
+        `[ai] Gemini attempt ${attempt}/3`
+      );
 
-      // Gemini API authentication
-      "x-goog-api-key": env.AI_API_KEY,
-    },
+      res = await fetch(url, {
+        method: "POST",
 
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": env.AI_API_KEY,
+        },
 
-          parts: [
+        body: JSON.stringify({
+          contents: [
             {
-              text: prompt,
+              role: "user",
+              parts: [
+                {
+                  text: prompt,
+                },
+              ],
             },
           ],
-        },
-      ],
 
-      generationConfig: {
-        temperature: 0.2,
-      },
-    }),
-  });
+          generationConfig: {
+            temperature: 0.2,
+          },
+        }),
+      });
+
+      // Successful response
+      if (res.ok) {
+        break;
+      }
+
+      // Retry only for temporary Gemini overload
+      if (res.status === 503 && attempt < 3) {
+        console.warn(
+          `[ai] Gemini returned 503. Retrying in ${
+            attempt * 2
+          } seconds...`
+        );
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, attempt * 2000)
+        );
+
+        continue;
+      }
+
+      // Other errors should not be retried
+      break;
+    } catch (error) {
+      console.error("[ai] Gemini network error:", error);
+
+      if (attempt < 3) {
+        console.warn(
+          `[ai] Retrying in ${attempt * 2} seconds...`
+        );
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, attempt * 2000)
+        );
+      } else {
+        throw new HttpError(
+          502,
+          "Unable to connect to AI provider",
+          "AI_NETWORK_ERROR"
+        );
+      }
+    }
+  }
+
+  // ---------------------------------------------------------
+  // SAFETY CHECK
+  // ---------------------------------------------------------
+  if (!res) {
+    throw new HttpError(
+      502,
+      "AI provider did not return a response",
+      "AI_NO_RESPONSE"
+    );
+  }
 
   // ---------------------------------------------------------
   // PROVIDER ERROR
@@ -213,7 +272,6 @@ ${buildUserPrompt(input)}`;
           text?: string;
         }>;
       };
-
       finishReason?: string;
     }>;
   };
@@ -227,7 +285,10 @@ ${buildUserPrompt(input)}`;
   // EMPTY RESPONSE
   // ---------------------------------------------------------
   if (!content) {
-    console.error("[ai-provider] Empty Gemini response:", json);
+    console.error(
+      "[ai-provider] Empty Gemini response:",
+      json
+    );
 
     throw new HttpError(
       502,
