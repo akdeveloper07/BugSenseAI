@@ -13,6 +13,10 @@ import { fail } from "./utils/apiResponse";
 export function createApp() {
   const app = express();
 
+  // Trust Render's reverse proxy.
+  // This must be configured before rate-limit middleware.
+  app.set("trust proxy", 1);
+
   // Security
   app.use(helmet());
 
@@ -21,7 +25,7 @@ export function createApp() {
     cors({
       origin: (origin, callback) => {
         // Allow requests without an Origin header
-        // (Postman, server-to-server requests, etc.)
+        // such as Postman and server-to-server requests.
         if (!origin) {
           return callback(null, true);
         }
@@ -29,7 +33,7 @@ export function createApp() {
         const allowedOrigins = [
           env.CLIENT_ORIGIN,
 
-          // Your stable Vercel production URL
+          // Stable Vercel production URL
           "https://bug-sense-ai-wheat.vercel.app",
         ];
 
