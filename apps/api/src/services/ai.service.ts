@@ -40,10 +40,6 @@ function isDemoKey(key: string): boolean {
 
 /**
  * Demo-mode analysis.
- *
- * This is not a full AI code analyzer.
- * It checks only a few obvious error patterns.
- * It must not automatically report every submission as buggy.
  */
 function demoResponse(input: AnalysisInput): string {
   const code = input.codeInput || "";
@@ -52,7 +48,7 @@ function demoResponse(input: AnalysisInput): string {
 
   const text = `${code}\n${logs}\n${description}`;
 
-  // 1. Detect explicit null or undefined runtime errors
+  // 1. Null / undefined errors
   const hasNullishError =
     /cannot read propert|cannot read propert(y|ies)|undefined|nullpointer|nonetype|none type/i.test(
       text
@@ -71,7 +67,7 @@ Confidence: 78%
 Summary: Demo mode detected a possible null or undefined value error. This is a heuristic result, not a full AI diagnosis.`;
   }
 
-  // 2. Detect explicit division-by-zero evidence
+  // 2. Division by zero
   const hasDivisionByZero =
     /zerodivisionerror|division by zero/i.test(text) ||
     /\/\s*0(?:\s|[;,)\]}]|$)/.test(code);
@@ -89,7 +85,7 @@ Confidence: 95%
 Summary: Demo mode detected a possible division-by-zero error.`;
   }
 
-  // 3. Detect an unsafe Python average calculation
+  // 3. Unsafe Python average
   const hasPossibleEmptyAverage =
     /sum\s*\(\s*\w+\s*\)\s*\/\s*len\s*\(\s*\w+\s*\)/i.test(code) &&
     !/if\s+not\s+\w+\s*:/i.test(code) &&
@@ -108,7 +104,7 @@ Confidence: 82%
 Summary: Demo mode detected a possible empty-collection average issue.`;
   }
 
-  // 4. No obvious bug detected
+  // 4. No obvious bug
   return `Bug Detected: No
 Bug Type: None
 Severity: None
@@ -121,6 +117,9 @@ Confidence: 85%
 Summary: Demo mode did not detect an obvious issue in the submitted code. This is not a guarantee that the code is completely bug-free.`;
 }
 
+/**
+ * Call Google Gemini API.
+ */
 export async function callBugSenseModel(
   input: AnalysisInput
 ): Promise<string> {
@@ -133,36 +132,54 @@ export async function callBugSenseModel(
     return demoResponse(input);
   }
 
-  // Live AI provider
+  // Remove trailing slash from base URL
   const baseUrl = env.AI_BASE_URL.replace(/\/+$/, "");
-  const url = `${baseUrl}/chat/completions`;
+
+  // Gemini generateContent endpoint
+  const url =
+    `${baseUrl}/v1beta/models/${env.AI_MODEL}:generateContent` +
+    `?key=${encodeURIComponent(env.AI_API_KEY)}`;
+
+  const prompt = `${BUGSENSE_SYSTEM_PROMPT}
+
+${buildUserPrompt(input)}`;
+
+  console.log("[ai] Gemini request:", {
+    baseUrl,
+    model: env.AI_MODEL,
+    hasApiKey: Boolean(env.AI_API_KEY),
+  });
 
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.AI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: env.AI_MODEL,
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: BUGSENSE_SYSTEM_PROMPT,
-        },
+      contents: [
         {
           role: "user",
-          content: buildUserPrompt(input),
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
         },
       ],
+      generationConfig: {
+        temperature: 0.2,
+      },
     }),
   });
 
+  // Provider error
   if (!res.ok) {
     const body = await res.text();
 
-    console.error("[ai-provider]", res.status, body);
+    console.error("[ai-provider]", {
+      status: res.status,
+      body,
+    });
 
     throw new HttpError(
       502,
@@ -171,17 +188,26 @@ export async function callBugSenseModel(
     );
   }
 
+  // Parse Gemini response
   const json = (await res.json()) as {
-    choices?: {
-      message?: {
-        content?: string;
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{
+          text?: string;
+        }>;
       };
-    }[];
+      finishReason?: string;
+    }>;
   };
 
-  const content = json.choices?.[0]?.message?.content;
+  const content = json.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
 
   if (!content) {
+    console.error("[ai-provider] Empty Gemini response:", json);
+
     throw new HttpError(
       502,
       "AI provider returned an empty response",
