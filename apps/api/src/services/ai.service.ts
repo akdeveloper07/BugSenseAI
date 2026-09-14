@@ -41,7 +41,7 @@ function isDemoKey(key: string): boolean {
 /**
  * Demo-mode analysis.
  *
- * This is NOT a full AI code analyzer.
+ * This is not a full AI code analyzer.
  * It checks only a few obvious error patterns.
  * It must not automatically report every submission as buggy.
  */
@@ -52,9 +52,7 @@ function demoResponse(input: AnalysisInput): string {
 
   const text = `${code}\n${logs}\n${description}`;
 
-  // --------------------------------------------------
-  // 1. Detect explicit null / undefined runtime errors
-  // --------------------------------------------------
+  // 1. Detect explicit null or undefined runtime errors
   const hasNullishError =
     /cannot read propert|cannot read propert(y|ies)|undefined|nullpointer|nonetype|none type/i.test(
       text
@@ -73,9 +71,7 @@ Confidence: 78%
 Summary: Demo mode detected a possible null or undefined value error. This is a heuristic result, not a full AI diagnosis.`;
   }
 
-  // --------------------------------------------------
   // 2. Detect explicit division-by-zero evidence
-  // --------------------------------------------------
   const hasDivisionByZero =
     /zerodivisionerror|division by zero/i.test(text) ||
     /\/\s*0(?:\s|[;,)\]}]|$)/.test(code);
@@ -93,9 +89,7 @@ Confidence: 95%
 Summary: Demo mode detected a possible division-by-zero error.`;
   }
 
-  // --------------------------------------------------
-  // 3. Detect explicit Python empty-list average issue
-  // --------------------------------------------------
+  // 3. Detect an unsafe Python average calculation
   const hasPossibleEmptyAverage =
     /sum\s*\(\s*\w+\s*\)\s*\/\s*len\s*\(\s*\w+\s*\)/i.test(code) &&
     !/if\s+not\s+\w+\s*:/i.test(code) &&
@@ -114,9 +108,7 @@ Confidence: 82%
 Summary: Demo mode detected a possible empty-collection average issue.`;
   }
 
-  // --------------------------------------------------
   // 4. No obvious bug detected
-  // --------------------------------------------------
   return `Bug Detected: No
 Bug Type: None
 Severity: None
@@ -132,9 +124,7 @@ Summary: Demo mode did not detect an obvious issue in the submitted code. This i
 export async function callBugSenseModel(
   input: AnalysisInput
 ): Promise<string> {
-  // --------------------------------------------------
   // Demo mode
-  // --------------------------------------------------
   if (isDemoKey(env.AI_API_KEY)) {
     console.warn(
       "[ai] Using demo response. Set AI_API_KEY for a live provider."
@@ -143,9 +133,7 @@ export async function callBugSenseModel(
     return demoResponse(input);
   }
 
-  // --------------------------------------------------
   // Live AI provider
-  // --------------------------------------------------
   const baseUrl = env.AI_BASE_URL.replace(/\/+$/, "");
   const url = `${baseUrl}/chat/completions`;
 
