@@ -6,8 +6,11 @@ const app = createApp();
 
 async function main() {
   await prisma.$connect();
+
   app.listen(env.PORT, () => {
-    console.log(`BugSense API listening on http://localhost:${env.PORT}`);
+    console.log(
+      `BugSense API listening on http://localhost:${env.PORT}`,
+    );
   });
 }
 
