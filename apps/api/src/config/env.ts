@@ -43,7 +43,7 @@ const envSchema = z.object({
   // Gemini model
   AI_MODEL: z
     .string()
-    .default("gemini-2.5-flash"),
+    .default("gemini-3.6-flash"),
 
   ADMIN_EMAIL: z
     .string()
