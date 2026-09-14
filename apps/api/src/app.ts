@@ -13,8 +13,7 @@ import { fail } from "./utils/apiResponse";
 export function createApp() {
   const app = express();
 
-  // Trust Render's reverse proxy.
-  // This must be configured before rate-limit middleware.
+  // Trust Render's reverse proxy
   app.set("trust proxy", 1);
 
   // Security
@@ -24,25 +23,22 @@ export function createApp() {
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests without an Origin header
-        // such as Postman and server-to-server requests.
+        // Allow Postman and server-to-server requests
         if (!origin) {
           return callback(null, true);
         }
 
         const allowedOrigins = [
           env.CLIENT_ORIGIN,
-
-          // Stable Vercel production URL
           "https://bug-sense-ai-wheat.vercel.app",
         ];
 
-        // Allow the exact configured frontend
+        // Allow configured frontend origins
         if (allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
 
-        // Allow Vercel deployment URLs for your project
+        // Allow Vercel preview deployment URLs
         const isVercelDeployment =
           /^https:\/\/bug-sense-[a-z0-9-]+-akdeveloper07\.vercel\.app$/.test(
             origin,
@@ -54,7 +50,6 @@ export function createApp() {
 
         return callback(new Error("Not allowed by CORS"));
       },
-
       credentials: true,
     }),
   );
@@ -64,6 +59,14 @@ export function createApp() {
 
   // Cookies
   app.use(cookieParser());
+
+  // Root route
+  app.get("/", (_req, res) => {
+    res.json({
+      success: true,
+      message: "BugSense API is running",
+    });
+  });
 
   // Health check
   app.get("/api/health", (_req, res) => {
