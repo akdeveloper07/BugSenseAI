@@ -1,4 +1,4 @@
-]import { env } from "../config/env";
+import { env } from "../config/env";
 import { BUGSENSE_SYSTEM_PROMPT } from "../constants/systemPrompt";
 import { HttpError } from "../utils/httpError";
 
