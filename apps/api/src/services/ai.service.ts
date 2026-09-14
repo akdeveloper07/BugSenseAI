@@ -1,4 +1,4 @@
-import { env } from "../config/env";
+]import { env } from "../config/env";
 import { BUGSENSE_SYSTEM_PROMPT } from "../constants/systemPrompt";
 import { HttpError } from "../utils/httpError";
 
@@ -40,6 +40,7 @@ function isDemoKey(key: string): boolean {
 
 /**
  * Demo-mode analysis.
+ * Used only when no real AI API key is configured.
  */
 function demoResponse(input: AnalysisInput): string {
   const code = input.codeInput || "";
@@ -123,7 +124,9 @@ Summary: Demo mode did not detect an obvious issue in the submitted code. This i
 export async function callBugSenseModel(
   input: AnalysisInput
 ): Promise<string> {
-  // Demo mode
+  // ---------------------------------------------------------
+  // DEMO MODE
+  // ---------------------------------------------------------
   if (isDemoKey(env.AI_API_KEY)) {
     console.warn(
       "[ai] Using demo response. Set AI_API_KEY for a live provider."
@@ -132,13 +135,13 @@ export async function callBugSenseModel(
     return demoResponse(input);
   }
 
-  // Remove trailing slash from base URL
+  // ---------------------------------------------------------
+  // GEMINI CONFIGURATION
+  // ---------------------------------------------------------
   const baseUrl = env.AI_BASE_URL.replace(/\/+$/, "");
 
-  // Gemini generateContent endpoint
   const url =
-    `${baseUrl}/v1beta/models/${env.AI_MODEL}:generateContent` +
-    `?key=${encodeURIComponent(env.AI_API_KEY)}`;
+    `${baseUrl}/v1beta/models/${env.AI_MODEL}:generateContent`;
 
   const prompt = `${BUGSENSE_SYSTEM_PROMPT}
 
@@ -150,15 +153,24 @@ ${buildUserPrompt(input)}`;
     hasApiKey: Boolean(env.AI_API_KEY),
   });
 
+  // ---------------------------------------------------------
+  // GEMINI API REQUEST
+  // ---------------------------------------------------------
   const res = await fetch(url, {
     method: "POST",
+
     headers: {
       "Content-Type": "application/json",
+
+      // Gemini API authentication
+      "x-goog-api-key": env.AI_API_KEY,
     },
+
     body: JSON.stringify({
       contents: [
         {
           role: "user",
+
           parts: [
             {
               text: prompt,
@@ -166,13 +178,16 @@ ${buildUserPrompt(input)}`;
           ],
         },
       ],
+
       generationConfig: {
         temperature: 0.2,
       },
     }),
   });
 
-  // Provider error
+  // ---------------------------------------------------------
+  // PROVIDER ERROR
+  // ---------------------------------------------------------
   if (!res.ok) {
     const body = await res.text();
 
@@ -188,7 +203,9 @@ ${buildUserPrompt(input)}`;
     );
   }
 
-  // Parse Gemini response
+  // ---------------------------------------------------------
+  // PARSE GEMINI RESPONSE
+  // ---------------------------------------------------------
   const json = (await res.json()) as {
     candidates?: Array<{
       content?: {
@@ -196,6 +213,7 @@ ${buildUserPrompt(input)}`;
           text?: string;
         }>;
       };
+
       finishReason?: string;
     }>;
   };
@@ -205,6 +223,9 @@ ${buildUserPrompt(input)}`;
     .join("")
     .trim();
 
+  // ---------------------------------------------------------
+  // EMPTY RESPONSE
+  // ---------------------------------------------------------
   if (!content) {
     console.error("[ai-provider] Empty Gemini response:", json);
 
@@ -215,5 +236,8 @@ ${buildUserPrompt(input)}`;
     );
   }
 
+  // ---------------------------------------------------------
+  // SUCCESS
+  // ---------------------------------------------------------
   return content;
 }
