@@ -27,6 +27,8 @@ export default function SignupPage() {
       const code = err?.code || "";
       if (code === "auth/email-already-in-use") {
         setError("This email address is already registered. Please login instead.");
+      } else if (code === "auth/configuration-not-found") {
+        setError("Firebase Authentication is not activated yet in Firebase Console. Click 'Get started' in Firebase Console > Authentication, then enable Email/Password and Google.");
       } else if (code === "auth/weak-password") {
         setError("Password is too weak. Please use at least 6 characters.");
       } else {

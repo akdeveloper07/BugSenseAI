@@ -26,6 +26,8 @@ export default function LoginPage() {
       const code = err?.code || "";
       if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
         setError("Invalid email or password. Please verify your credentials.");
+      } else if (code === "auth/configuration-not-found") {
+        setError("Firebase Authentication is not activated yet in Firebase Console. Click 'Get started' in Firebase Console > Authentication, then enable Email/Password and Google.");
       } else if (code === "auth/too-many-requests") {
         setError("Too many failed attempts. Please try again later or reset password.");
       } else {
