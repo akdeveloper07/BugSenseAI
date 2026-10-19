@@ -16,8 +16,12 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BugSense AI — Intelligent debugging assistant",
+  title: "BugSense AI — Intelligent Debugging & Code Security",
   description: "Paste code, logs, or stack traces and get a structured bug report powered by AI.",
+  icons: {
+    icon: "/bugsense-logo.png",
+    apple: "/bugsense-logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

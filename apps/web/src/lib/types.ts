@@ -19,6 +19,7 @@ export type User = {
   role: Role;
   isActive: boolean;
   createdAt: string;
+  photoURL?: string | null;
 };
 
 export type Analysis = {
