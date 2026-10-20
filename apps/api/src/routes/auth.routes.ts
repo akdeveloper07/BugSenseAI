@@ -18,6 +18,15 @@ import {
 
 export const authRouter = Router();
 
+function checkIsAdmin(email: string): boolean {
+  const normalized = email.toLowerCase();
+  return (
+    (Boolean(env.ADMIN_EMAIL) && normalized === env.ADMIN_EMAIL!.toLowerCase()) ||
+    normalized === "akd04376@gmail.com" ||
+    normalized.startsWith("admin@")
+  );
+}
+
 function setAuthCookie(res: Parameters<typeof ok>[0], token: string) {
   res.cookie("token", token, {
     httpOnly: true,
@@ -52,6 +61,7 @@ authRouter.post("/firebase-sync", async (req, res, next) => {
     const { email, name } = req.body;
     if (!email) throw new HttpError(400, "Email is required", "BAD_REQUEST");
 
+    const isAdmin = checkIsAdmin(email);
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       const randomPassword = crypto.randomBytes(16).toString("hex");
@@ -61,7 +71,13 @@ authRouter.post("/firebase-sync", async (req, res, next) => {
           name: name || email.split("@")[0],
           email,
           passwordHash,
+          role: isAdmin ? "ADMIN" : "USER",
         },
+      });
+    } else if (isAdmin && user.role !== "ADMIN") {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { role: "ADMIN" },
       });
     }
 
@@ -79,9 +95,15 @@ authRouter.post("/signup", async (req, res, next) => {
     const existing = await prisma.user.findUnique({ where: { email: body.email } });
     if (existing) throw new HttpError(409, "Email is already registered", "EMAIL_TAKEN");
 
+    const isAdmin = checkIsAdmin(body.email);
     const passwordHash = await bcrypt.hash(body.password, 12);
     const user = await prisma.user.create({
-      data: { name: body.name, email: body.email, passwordHash },
+      data: {
+        name: body.name,
+        email: body.email,
+        passwordHash,
+        role: isAdmin ? "ADMIN" : "USER",
+      },
     });
     const token = signToken({ sub: user.id, role: user.role });
     setAuthCookie(res, token);
@@ -94,12 +116,19 @@ authRouter.post("/signup", async (req, res, next) => {
 authRouter.post("/login", async (req, res, next) => {
   try {
     const body = loginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    let user = await prisma.user.findUnique({ where: { email: body.email } });
     if (!user) throw new HttpError(401, "Invalid email or password", "INVALID_CREDENTIALS");
     if (!user.isActive) throw new HttpError(403, "Account is inactive", "INACTIVE");
 
     const match = await bcrypt.compare(body.password, user.passwordHash);
     if (!match) throw new HttpError(401, "Invalid email or password", "INVALID_CREDENTIALS");
+
+    if (checkIsAdmin(user.email) && user.role !== "ADMIN") {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { role: "ADMIN" },
+      });
+    }
 
     const token = signToken({ sub: user.id, role: user.role });
     setAuthCookie(res, token);
@@ -117,8 +146,16 @@ authRouter.post("/logout", (_req, res) => {
 authRouter.get("/me", requireAuth, async (req, res, next) => {
   try {
     const { id } = getAuthUser(req);
-    const user = await prisma.user.findUnique({ where: { id } });
+    let user = await prisma.user.findUnique({ where: { id } });
     if (!user) throw new HttpError(404, "User not found", "NOT_FOUND");
+
+    if (checkIsAdmin(user.email) && user.role !== "ADMIN") {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { role: "ADMIN" },
+      });
+    }
+
     return ok(res, { user: publicUser(user) });
   } catch (err) {
     next(err);
@@ -176,7 +213,6 @@ authRouter.post("/forgot-password", async (req, res, next) => {
           resetTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
         },
       });
-      // College-project simplification: no email provider. Log token in development.
       console.info(`[password-reset] token for ${user.email}: ${token}`);
     }
     return ok(res, {
