@@ -22,6 +22,7 @@ type AuthContextValue = {
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  syncBackendUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,6 +43,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Sync Firebase user with backend to obtain backend JWT token
+  const syncWithBackend = useCallback(async (fbUser: FirebaseUser) => {
+    try {
+      const data = await api<{ user: User; token: string }>("/api/auth/firebase-sync", {
+        method: "POST",
+        body: JSON.stringify({
+          email: fbUser.email,
+          name: fbUser.displayName || fbUser.email?.split("@")[0] || "User",
+          uid: fbUser.uid,
+        }),
+      });
+      setToken(data.token);
+      setUser({ ...data.user, photoURL: fbUser.photoURL || undefined });
+      return data.user;
+    } catch {
+      const fallback = buildUserFromFirebase(fbUser);
+      setUser(fallback);
+      return fallback;
+    }
+  }, []);
+
   // Sync / refresh user with backend if available
   const refresh = useCallback(async () => {
     try {
@@ -49,10 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user);
       return;
     } catch {
-      // Backend not authenticated; fallback to Firebase user if available
       const current = auth.currentUser;
       if (current) {
-        setUser(buildUserFromFirebase(current));
+        await syncWithBackend(current);
       } else {
         setUser(null);
         setToken(null);
@@ -60,25 +81,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [syncWithBackend]);
+
+  const syncBackendUser = useCallback(async () => {
+    const current = auth.currentUser;
+    if (current) {
+      await syncWithBackend(current);
+    }
+  }, [syncWithBackend]);
 
   // Listen to Firebase Authentication state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        // Check if existing backend token validates
-        const token = getToken();
-        if (token) {
-          try {
-            const data = await api<{ user: User }>("/api/auth/me");
-            setUser({ ...data.user, photoURL: fbUser.photoURL || undefined });
-            setLoading(false);
-            return;
-          } catch {
-            // Ignore token mismatch and fallback to Firebase user
-          }
-        }
-        setUser(buildUserFromFirebase(fbUser));
+        await syncWithBackend(fbUser);
       } else {
         // No Firebase user; check if legacy backend session exists
         const token = getToken();
@@ -100,66 +116,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [syncWithBackend]);
 
   // Real Email/Password login using Firebase Authentication
-  const login = useCallback(async (email: string, password: string) => {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    const fbUser = cred.user;
-
-    // Synchronize with backend API session if available
-    try {
-      const data = await api<{ user: User; token: string }>("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      setToken(data.token);
-      setUser({ ...data.user, photoURL: fbUser.photoURL || undefined });
-    } catch {
-      // If backend account doesn't exist yet or backend is offline,
-      // the user is successfully authenticated via Firebase.
-      setUser(buildUserFromFirebase(fbUser));
-    }
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      await syncWithBackend(cred.user);
+    },
+    [syncWithBackend],
+  );
 
   // Real Email/Password signup using Firebase Authentication
-  const signup = useCallback(async (name: string, email: string, password: string) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    if (name) {
-      await updateProfile(cred.user, { displayName: name });
-    }
-    const fbUser = cred.user;
-
-    // Synchronize with backend API database if available
-    try {
-      const data = await api<{ user: User; token: string }>("/api/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({ name, email, password }),
-      });
-      setToken(data.token);
-      setUser({ ...data.user, photoURL: fbUser.photoURL || undefined });
-    } catch {
-      setUser(buildUserFromFirebase(fbUser));
-    }
-  }, []);
+  const signup = useCallback(
+    async (name: string, email: string, password: string) => {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      if (name) {
+        await updateProfile(cred.user, { displayName: name });
+      }
+      await syncWithBackend(cred.user);
+    },
+    [syncWithBackend],
+  );
 
   // Real Google Sign-In using Firebase Authentication
   const loginWithGoogle = useCallback(async () => {
     const cred = await signInWithPopup(auth, googleProvider);
-    const fbUser = cred.user;
-
-    // Check if backend can match or create account
-    try {
-      // Try to sync with backend if possible
-      const email = fbUser.email || "";
-      const name = fbUser.displayName || email.split("@")[0] || "Google User";
-      const data = await api<{ user: User; token: string }>("/api/auth/me");
-      setUser({ ...data.user, photoURL: fbUser.photoURL || undefined });
-    } catch {
-      // Fallback directly to verified Firebase Google profile
-      setUser(buildUserFromFirebase(fbUser));
-    }
-  }, []);
+    await syncWithBackend(cred.user);
+  }, [syncWithBackend]);
 
   // Real Sign Out using Firebase Authentication
   const logout = useCallback(async () => {
@@ -179,8 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, signup, loginWithGoogle, logout, refresh }),
-    [user, loading, login, signup, loginWithGoogle, logout, refresh],
+    () => ({ user, loading, login, signup, loginWithGoogle, logout, refresh, syncBackendUser }),
+    [user, loading, login, signup, loginWithGoogle, logout, refresh, syncBackendUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

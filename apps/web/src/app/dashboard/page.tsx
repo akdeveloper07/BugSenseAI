@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Guard } from "@/components/Guard";
 import { AnalysisResult } from "@/components/AnalysisResult";
 import { api, ApiRequestError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { Analysis } from "@/lib/types";
 
 const LANGUAGES = ["JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Go", "PHP", "Ruby", "Other"];
@@ -19,6 +20,7 @@ export default function DashboardPage() {
 }
 
 function AnalyzeView() {
+  const { syncBackendUser } = useAuth();
   const [language, setLanguage] = useState("JavaScript");
   const [framework, setFramework] = useState("");
   const [environment, setEnvironment] = useState("");
@@ -34,17 +36,38 @@ function AnalyzeView() {
     setError("");
     setPending(true);
     try {
-      const data = await api<{ analysis: Analysis }>("/api/analyze-bug", {
-        method: "POST",
-        body: JSON.stringify({
-          language,
-          framework: framework || null,
-          environment: environment || null,
-          codeInput,
-          logsInput: logsInput || null,
-          bugDescription: bugDescription || null,
-        }),
-      });
+      let data: { analysis: Analysis };
+      try {
+        data = await api<{ analysis: Analysis }>("/api/analyze-bug", {
+          method: "POST",
+          body: JSON.stringify({
+            language,
+            framework: framework || null,
+            environment: environment || null,
+            codeInput,
+            logsInput: logsInput || null,
+            bugDescription: bugDescription || null,
+          }),
+        });
+      } catch (firstErr) {
+        if (firstErr instanceof ApiRequestError && firstErr.status === 401) {
+          // Re-sync with backend using current Firebase session and retry once
+          await syncBackendUser();
+          data = await api<{ analysis: Analysis }>("/api/analyze-bug", {
+            method: "POST",
+            body: JSON.stringify({
+              language,
+              framework: framework || null,
+              environment: environment || null,
+              codeInput,
+              logsInput: logsInput || null,
+              bugDescription: bugDescription || null,
+            }),
+          });
+        } else {
+          throw firstErr;
+        }
+      }
       setAnalysis(data.analysis);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Analysis failed");

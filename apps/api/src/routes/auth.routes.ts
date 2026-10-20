@@ -46,6 +46,33 @@ function publicUser(user: {
   };
 }
 
+// Seamless Firebase user sync endpoint
+authRouter.post("/firebase-sync", async (req, res, next) => {
+  try {
+    const { email, name } = req.body;
+    if (!email) throw new HttpError(400, "Email is required", "BAD_REQUEST");
+
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const randomPassword = crypto.randomBytes(16).toString("hex");
+      const passwordHash = await bcrypt.hash(randomPassword, 12);
+      user = await prisma.user.create({
+        data: {
+          name: name || email.split("@")[0],
+          email,
+          passwordHash,
+        },
+      });
+    }
+
+    const token = signToken({ sub: user.id, role: user.role });
+    setAuthCookie(res, token);
+    return ok(res, { user: publicUser(user), token });
+  } catch (err) {
+    next(err);
+  }
+});
+
 authRouter.post("/signup", async (req, res, next) => {
   try {
     const body = signupSchema.parse(req.body);

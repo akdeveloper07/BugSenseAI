@@ -31,6 +31,8 @@ export function createApp() {
         const allowedOrigins = [
           env.CLIENT_ORIGIN,
           "https://bug-sense-ai-wheat.vercel.app",
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
         ];
 
         // Allow configured frontend origins
