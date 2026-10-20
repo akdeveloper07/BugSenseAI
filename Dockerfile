@@ -1,34 +1,15 @@
-
-# Stage 1: Build BugSense AI
-FROM node:22-alpine AS build
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy workspace manifests and lockfile
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
-# Copy workspace package manifests
-COPY apps/api/package.json ./apps/api/package.json
-COPY apps/web/package.json ./apps/web/package.json
+RUN npm ci
 
-# Install dependencies, including TypeScript dev dependencies
-RUN npm ci --include=dev
-
-# Copy the complete source code
 COPY . .
 
-# Build the API and frontend workspaces
 RUN npm run build
 
-# Stage 2: Package the frontend
-FROM node:22-alpine AS frontend
+EXPOSE 3000
 
-WORKDIR /app
-
-RUN npm install -g serve
-
-COPY --from=build /app/apps/web/dist ./dist
-
-EXPOSE 4173
-
-CMD ["serve", "-s", "dist", "-l", "4173"]
+CMD ["npm", "start"]
