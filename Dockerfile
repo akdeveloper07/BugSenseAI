@@ -1,10 +1,11 @@
+
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-COPY apps/api/package*.json ./apps/api/
-COPY apps/web/package*.json ./apps/web/
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/web/package.json ./apps/web/package.json
 
 RUN npm ci --include=dev
 
@@ -14,4 +15,4 @@ RUN npm run build
 
 EXPOSE 3000
 
-CMD ["npm", "start", "-w", "@bugsense/api"]
+CMD ["npm", "run", "start", "-w", "@bugsense/api"]
